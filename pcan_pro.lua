@@ -74,6 +74,11 @@ p_pcan_pro.fields.rx_err_cnt  = ProtoField.uint8("pcan_pro.rx_err_cnt", "RX Erro
 p_pcan_pro.fields.tx_err_cnt  = ProtoField.uint8("pcan_pro.tx_err_cnt", "TX Error Counter", base.DEC)
 p_pcan_pro.fields.timestamp   = ProtoField.uint32("pcan_pro.timestamp", "Timestamp (us)", base.DEC)
 p_pcan_pro.fields.error_frame = ProtoField.uint32("pcan_pro.error_frame", "Error Frame", base.HEX)
+
+p_pcan_pro.fields.led_mode    = ProtoField.uint16("pcan_pro.led_mode", "LED Mode", base.HEX)
+p_pcan_pro.fields.led_timeout = ProtoField.uint32("pcan_pro.led_timeout", "LED Timeout", base.DEC)
+p_pcan_pro.fields.serial_num  = ProtoField.uint32("pcan_pro.serial_num", "Serial Number", base.DEC)
+
 p_pcan_pro.fields.unknown     = ProtoField.bytes("pcan_pro.unknown", "Unidentified message data")
 
 -- Referenced USB URB dissector fields.
@@ -151,6 +156,17 @@ local function dissect_set_silent(tvb, pinfo, subtree)
     subtree:add(p_pcan_pro.fields.silent, tvb(2,2), tvb(2,2):le_uint())
 end
 
+local function dissect_set_led(tvb, pinfo, subtree)
+    subtree:add(p_pcan_pro.fields.channel, tvb(1,1))
+    subtree:add(p_pcan_pro.fields.led_mode, tvb(2,2), tvb(2,2):le_uint())
+    subtree:add(p_pcan_pro.fields.led_timeout, tvb(4,4), tvb(4,4):le_uint())
+end
+
+local function dissect_dev_id(tvb, pinfo, subtree)
+    subtree:add(p_pcan_pro.fields.channel, tvb(1,1))
+    subtree:add(p_pcan_pro.fields.serial_num, tvb(4,4), tvb(4,4):le_uint())
+end
+
 local function dissect_set_filter(tvb, pinfo, subtree)
     subtree:add(p_pcan_pro.fields.filter_mode, tvb(2,2), tvb(2,2):le_uint())
 end
@@ -198,7 +214,7 @@ function p_pcan_pro.dissector(tvb, pinfo, tree)
         -- Payload-carrying packets only.
         if ( 
              ( (urb_type == 0x53) and ( (endpoint == 1) or (endpoint == 2) or (endpoint == 3) ) )
-             or ( (urb_type == 0x43) and ( (endpoint == 0x02) ) ) 
+             or ( (urb_type == 0x43) and ( (endpoint == 1) or (endpoint == 0x02) ) ) 
            )
         then
             local rec_cnt_rd = tvb(0,2):le_uint()
@@ -246,6 +262,10 @@ function p_pcan_pro.dissector(tvb, pinfo, tree)
                     dissect_set_filter(data, pinfo, subtree)
                 elseif (command==0x10) then
                     dissect_set_ts_mode(data, pinfo, subtree)
+                elseif (command==0x12) then
+                    dissect_dev_id(data, pinfo, subtree)
+                elseif (command==0x1C) then
+                    dissect_set_led(data, pinfo, subtree)
                 elseif (command==0x84) then
                     dissect_rx_status(data, pinfo, subtree)
                 elseif (command==0x85) then
@@ -268,5 +288,6 @@ function p_pcan_pro.init()
     local usb_bulk_dissectors = DissectorTable.get("usb.bulk")
     usb_bulk_dissectors:add(0xFF, p_pcan_pro)
     usb_bulk_dissectors:add(0xFFFF, p_pcan_pro)
+    usb_bulk_dissectors:add(0x00, p_pcan_pro)
 end
 
