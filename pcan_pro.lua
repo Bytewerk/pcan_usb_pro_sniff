@@ -18,7 +18,7 @@ local record_types = {
     [0x83] = "RX RTR Message",
     [0x84] = "RX Status",
     [0x85] = "RX Timestamp",
-    [0x86] = "Unknown Command (0x86)",
+    [0x86] = "CMD 0x86",
     [0x41] = "TX Message (8 bytes)",
     [0x42] = "TX Message (4 bytes)",
     [0x43] = "TX Message (0 bytes)"
@@ -37,7 +37,7 @@ local record_lengths = {
     [0x82] = 12,
     [0x83] = 12,
     [0x84] = 12,
-    [0x85] = 20,
+    [0x85] = 12,
     [0x86] = 8,
     [0x41] = 16,
     [0x42] = 12,
@@ -200,7 +200,7 @@ local function dissect_rx_status(tvb, pinfo, subtree)
 end
 
 local function dissect_rx_timestamp(tvb, pinfo, subtree)
-    subtree:add(p_pcan_pro.fields.ts_data, tvb(0,16))
+    subtree:add(p_pcan_pro.fields.ts_data, tvb(4,8))
     subtree:add(p_pcan_pro.fields.timestamp, tvb(8,4), tvb(8,4):le_uint())
 end
 
