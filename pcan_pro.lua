@@ -18,6 +18,7 @@ local record_types = {
     [0x83] = "RX RTR Message",
     [0x84] = "RX Status",
     [0x85] = "RX Timestamp",
+    [0x86] = "Unknown Command (0x86)",
     [0x41] = "TX Message (8 bytes)",
     [0x42] = "TX Message (4 bytes)",
     [0x43] = "TX Message (0 bytes)"
@@ -37,6 +38,7 @@ local record_lengths = {
     [0x83] = 12,
     [0x84] = 12,
     [0x85] = 20,
+    [0x86] = 8,
     [0x41] = 16,
     [0x42] = 12,
     [0x43] = 8
@@ -202,6 +204,11 @@ local function dissect_rx_timestamp(tvb, pinfo, subtree)
     subtree:add(p_pcan_pro.fields.timestamp, tvb(8,4), tvb(8,4):le_uint())
 end
 
+local function dissect_0x86(data, pinfo, subtree)
+    subtree:add(p_pcan_pro.fields.unknown, data(0,8))
+end
+
+
 function p_pcan_pro.dissector(tvb, pinfo, tree)
     local transfer_type = tonumber(tostring(f_transfer_type()))
 
@@ -238,7 +245,7 @@ function p_pcan_pro.dissector(tvb, pinfo, tree)
                     pinfo.cols.info = info
                 else
                     warn_undecoded(tree, tvb(pos))
-                    pinfo.cols.info = info .. " +UNKNOWN DATA"
+                    pinfo.cols.info = info .. string.format("UNKNOWN CMD: 0x%02X", command)
                     return 0
                 end
 
@@ -270,6 +277,8 @@ function p_pcan_pro.dissector(tvb, pinfo, tree)
                     dissect_rx_status(data, pinfo, subtree)
                 elseif (command==0x85) then
                     dissect_rx_timestamp(data, pinfo, subtree)
+                elseif (command==0x86) then
+                    dissect_0x86(data, pinfo, subtree)
                 end
 
                 pos = pos + record_len
