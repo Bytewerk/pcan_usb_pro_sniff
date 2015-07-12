@@ -8,8 +8,11 @@ local record_types = {
     [0x02] = "Set Bitrate",
     [0x04] = "Set Bus Active",
     [0x05] = "Set Silent",
+    [0x07] = "CMD 0x07",
     [0x0a] = "Set Filter",
+    [0x0C] = "CMD 0x0C",
     [0x10] = "Set Timestamp",
+    [0x11] = "CMD 0x11 (switch busload on/off)",
     [0x12] = "Get Device ID",
     [0x1C] = "Set LED",
     [0x80] = "RX Message (8 bytes)",
@@ -18,7 +21,7 @@ local record_types = {
     [0x83] = "RX RTR Message",
     [0x84] = "RX Status",
     [0x85] = "RX Timestamp",
-    [0x86] = "CMD 0x86",
+    [0x86] = "Busload Info",
     [0x41] = "TX Message (8 bytes)",
     [0x42] = "TX Message (4 bytes)",
     [0x43] = "TX Message (0 bytes)"
@@ -28,8 +31,11 @@ local record_lengths = {
     [0x02] = 8,
     [0x04] = 4,
     [0x05] = 4,
-    [0x0a] = 4,
+    [0x07] = 4,
+    [0x0A] = 4,
+    [0x0C] = 8,
     [0x10] = 4,
+    [0x11] = 8,
     [0x12] = 8,
     [0x1C] = 8,
     [0x80] = 20,
@@ -81,6 +87,7 @@ p_pcan_pro.fields.led_mode    = ProtoField.uint16("pcan_pro.led_mode", "LED Mode
 p_pcan_pro.fields.led_timeout = ProtoField.uint32("pcan_pro.led_timeout", "LED Timeout", base.DEC)
 p_pcan_pro.fields.serial_num  = ProtoField.uint32("pcan_pro.serial_num", "Serial Number", base.DEC)
 
+p_pcan_pro.fields.busload     = ProtoField.uint16("pcan_pro.busload", "Busload", base.DEC)
 p_pcan_pro.fields.unknown     = ProtoField.bytes("pcan_pro.unknown", "Unidentified message data")
 
 -- Referenced USB URB dissector fields.
@@ -204,8 +211,19 @@ local function dissect_rx_timestamp(tvb, pinfo, subtree)
     subtree:add(p_pcan_pro.fields.timestamp, tvb(8,4), tvb(8,4):le_uint())
 end
 
-local function dissect_0x86(data, pinfo, subtree)
-    subtree:add(p_pcan_pro.fields.unknown, data(0,8))
+local function dissect_busload(data, pinfo, subtree)
+    channel = bit.band(bit.rshift(data(1,1):uint(), 4), 0x0F)
+    subtree:add(p_pcan_pro.fields.unknown, data(1,3))
+    subtree:add(p_pcan_pro.fields.channel, data(1,1), channel)
+    subtree:add(p_pcan_pro.fields.busload, data(2,2), data(2,2):le_uint())
+    subtree:add(p_pcan_pro.fields.timestamp, data(4,4), data(4,4):le_uint())
+end
+
+local function dissect_0x11(data, pinfo, subtree)
+    subtree:add(p_pcan_pro.fields.channel, data(1,1):uint())
+    subtree:add(p_pcan_pro.fields.unknown, data(2,6))
+    -- data(2,1) always ==0x61 ?
+    -- data(3,1) == on/off?
 end
 
 
@@ -269,6 +287,8 @@ function p_pcan_pro.dissector(tvb, pinfo, tree)
                     dissect_set_filter(data, pinfo, subtree)
                 elseif (command==0x10) then
                     dissect_set_ts_mode(data, pinfo, subtree)
+                elseif (command==0x11) then
+                    dissect_0x11(data, pinfo, subtree)
                 elseif (command==0x12) then
                     dissect_dev_id(data, pinfo, subtree)
                 elseif (command==0x1C) then
@@ -278,7 +298,7 @@ function p_pcan_pro.dissector(tvb, pinfo, tree)
                 elseif (command==0x85) then
                     dissect_rx_timestamp(data, pinfo, subtree)
                 elseif (command==0x86) then
-                    dissect_0x86(data, pinfo, subtree)
+                    dissect_busload(data, pinfo, subtree)
                 end
 
                 pos = pos + record_len
